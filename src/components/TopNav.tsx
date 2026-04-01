@@ -51,10 +51,6 @@ export default function TopNav() {
         <button className="text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center">
           <span className="material-symbols-outlined text-xl">notifications</span>
         </button>
-
-        <button className="text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center">
-          <span className="material-symbols-outlined text-xl">settings</span>
-        </button>
         
         <Link href="/profile" className="w-9 h-9 rounded-full overflow-hidden border-2 border-primary/20 hover:border-primary transition-colors hover:shadow-md cursor-pointer bg-surface-container block shrink-0">
           <img 

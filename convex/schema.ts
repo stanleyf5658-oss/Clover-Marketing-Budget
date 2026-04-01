@@ -12,7 +12,13 @@ export default defineSchema({
     marketingPercentage: v.number(),
     customPercentage: v.optional(v.number()),
     channels: v.array(v.string()),
-    avatarUrl: v.optional(v.string())
+    avatarUrl: v.optional(v.string()),
+    email: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    industry: v.optional(v.string()),
+    address: v.optional(v.string()),
+    lastName: v.optional(v.string()),
+    website: v.optional(v.string())
   }),
 
   // Categories like "Direct Response" or "Branding"

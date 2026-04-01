@@ -105,3 +105,36 @@ export const getContractor = query({
     return latestContractors[0];
   }
 });
+
+/** Save UI profile fields back to the contractor */
+export const updateContractor = mutation({
+  args: {
+    firstName: v.string(),
+    companyName: v.string(),
+    revenueGoal: v.number(),
+    email: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    industry: v.optional(v.string()),
+    address: v.optional(v.string()),
+    lastName: v.optional(v.string()),
+    website: v.optional(v.string()),
+    avatarUrl: v.optional(v.string())
+  },
+  handler: async (ctx, args) => {
+    const latestContractors = await ctx.db.query("contractors").order("desc").take(1);
+    if (latestContractors.length === 0) throw new Error("No active contractor found to update");
+    
+    await ctx.db.patch(latestContractors[0]._id, {
+      firstName: args.firstName,
+      companyName: args.companyName,
+      revenueGoal: args.revenueGoal,
+      email: args.email,
+      phone: args.phone,
+      industry: args.industry,
+      address: args.address,
+      lastName: args.lastName,
+      website: args.website,
+      avatarUrl: args.avatarUrl
+    });
+  }
+});
