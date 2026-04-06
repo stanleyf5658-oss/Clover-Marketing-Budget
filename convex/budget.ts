@@ -10,26 +10,25 @@ export const getBudget = query({
     if (latestContractors.length === 0) return []; // No profile exists
     const myContractor = latestContractors[0];
 
-    // 2. Fetch all root categories and deduplicate them by name (in case seed script ran multiple times)
-    const rawCategories = await ctx.db.query("categories").collect();
-    const categoriesMap = new Map();
-    rawCategories.forEach(cat => {
-      if (!categoriesMap.has(cat.name)) {
-         categoriesMap.set(cat.name, cat);
-      }
-    });
-    const categories = Array.from(categoriesMap.values());
-    
-    // Sort logic
-    const sortedCategories = categories.sort((a, b) => a.orderIndex - b.orderIndex);
-
-    // 3. Fetch all channels
-    const allChannels = await ctx.db.query("channels").collect();
-    
-    // 4. Fetch budget allocations JUST for the active contractor
+    // 2. Fetch budget allocations JUST for the active contractor
     const allAllocations = await ctx.db.query("budget_allocations")
        .filter(q => q.eq(q.field("contractorId"), myContractor._id))
        .collect();
+
+    // 3. Extract unique category IDs and channel IDs from allocations
+    const categoryIds = Array.from(new Set(allAllocations.map(a => a.categoryId)));
+    const channelIds = Array.from(new Set(allAllocations.map(a => a.channelId)));
+
+    // 4. Fetch the relevant categories and channels
+    const categoriesRaw = await Promise.all(categoryIds.map(id => ctx.db.get(id)));
+    const allChannelsRaw = await Promise.all(channelIds.map(id => ctx.db.get(id)));
+    
+    // Type narrowing to remove nulls
+    const categories = categoriesRaw.filter((c): c is NonNullable<typeof c> => c !== null);
+    const allChannels = allChannelsRaw.filter((c): c is NonNullable<typeof c> => c !== null);
+
+    // Sort logic
+    const sortedCategories = categories.sort((a, b) => a.orderIndex - b.orderIndex);
 
     // 5. Build Planner UI structure
     const rawResult = sortedCategories.map(cat => {
