@@ -4,6 +4,8 @@ import { v } from "convex/values";
 export default defineSchema({
   // Users or contractors who own the dashboard
   contractors: defineTable({
+    // Clerk user ID — links this record to the authenticated user
+    userId: v.string(),
     firstName: v.string(),
     companyName: v.string(),
     revenueGoal: v.number(),
@@ -18,13 +20,13 @@ export default defineSchema({
     industry: v.optional(v.string()),
     address: v.optional(v.string()),
     lastName: v.optional(v.string()),
-    website: v.optional(v.string())
-  }),
+    website: v.optional(v.string()),
+  }).index("by_user", ["userId"]),
 
   // Categories like "Direct Response" or "Branding"
   categories: defineTable({
     name: v.string(),
-    orderIndex: v.number()
+    orderIndex: v.number(),
   }),
 
   // Channels under specific Categories (e.g. "Digital Media")
@@ -33,14 +35,14 @@ export default defineSchema({
     name: v.string(),
     orderIndex: v.number(),
     // Base estimated annual if no monthly breakdowns exist
-    baseAnnualTotal: v.optional(v.number())
+    baseAnnualTotal: v.optional(v.number()),
   }),
 
   // Subchannels under specific Channels (e.g. "PPC" or "LSA" under Digital Media)
   subchannels: defineTable({
     channelId: v.id("channels"),
     name: v.string(),
-    orderIndex: v.number()
+    orderIndex: v.number(),
   }),
 
   // The actual allocated budget rows per month
@@ -62,7 +64,7 @@ export default defineSchema({
     oct: v.number(),
     nov: v.number(),
     dec: v.number(),
-    year: v.number()
+    year: v.number(),
   }),
 
   // The actuals tracked per month/channel for performance ROI
@@ -74,6 +76,12 @@ export default defineSchema({
     year: v.number(),
     actualSpend: v.number(),
     actualLeads: v.number(),
-    actualRevenue: v.number()
-  }).index("by_month_channel", ["contractorId", "year", "month", "channelId", "subchannelId"])
+    actualRevenue: v.number(),
+  }).index("by_month_channel", [
+    "contractorId",
+    "year",
+    "month",
+    "channelId",
+    "subchannelId",
+  ]),
 });

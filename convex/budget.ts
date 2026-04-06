@@ -1,52 +1,51 @@
-import { query, mutation } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
-/** Read the fully populated budget object hierarchy */
+/** Read the full budget structure for the authenticated user */
 export const getBudget = query({
   args: {},
   handler: async (ctx) => {
-    // 1. Fetch the CURRENT contractor (latest one since there is no auth yet)
-    const latestContractors = await ctx.db.query("contractors").order("desc").take(1);
-    if (latestContractors.length === 0) return []; // No profile exists
-    const myContractor = latestContractors[0];
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return [];
 
-    // 2. Fetch budget allocations JUST for the active contractor
-    const allAllocations = await ctx.db.query("budget_allocations")
-       .filter(q => q.eq(q.field("contractorId"), myContractor._id))
-       .collect();
+    const myContractor = await ctx.db
+      .query("contractors")
+      .withIndex("by_user", (q) => q.eq("userId", identity.subject))
+      .first();
 
-    // 3. Extract unique category IDs and channel IDs from allocations
-    const categoryIds = Array.from(new Set(allAllocations.map(a => a.categoryId)));
-    const channelIds = Array.from(new Set(allAllocations.map(a => a.channelId)));
+    if (!myContractor) return [];
 
-    // 4. Fetch the relevant categories and channels
-    const categoriesRaw = await Promise.all(categoryIds.map(id => ctx.db.get(id)));
-    const allChannelsRaw = await Promise.all(channelIds.map(id => ctx.db.get(id)));
-    
-    // Type narrowing to remove nulls
+    const allAllocations = await ctx.db
+      .query("budget_allocations")
+      .filter((q) => q.eq(q.field("contractorId"), myContractor._id))
+      .collect();
+
+    const categoryIds = Array.from(new Set(allAllocations.map((a) => a.categoryId)));
+    const channelIds = Array.from(new Set(allAllocations.map((a) => a.channelId)));
+
+    const categoriesRaw = await Promise.all(categoryIds.map((id) => ctx.db.get(id)));
+    const allChannelsRaw = await Promise.all(channelIds.map((id) => ctx.db.get(id)));
+
     const categories = categoriesRaw.filter((c): c is NonNullable<typeof c> => c !== null);
     const allChannels = allChannelsRaw.filter((c): c is NonNullable<typeof c> => c !== null);
 
-    // Sort logic
     const sortedCategories = categories.sort((a, b) => a.orderIndex - b.orderIndex);
 
-    // 5. Build Planner UI structure
-    const rawResult = sortedCategories.map(cat => {
-      // Find channels belonging to this category
-      const myCategoryChannels = allChannels.filter(c => c.categoryId === cat._id).sort((a,b) => a.orderIndex - b.orderIndex);
-      
+    const rawResult = sortedCategories.map((cat) => {
+      const myCategoryChannels = allChannels
+        .filter((c) => c.categoryId === cat._id)
+        .sort((a, b) => a.orderIndex - b.orderIndex);
+
       const hydratedChannels = myCategoryChannels
-        // EXPLICIT FILTER: Only include channels that the user selected in onboarding
-        .filter(ch => myContractor.channels.includes(ch.name))
-        .map(ch => {
-          // Find allocation for this exact channel (ignoring subchannels for now)
-          const rawAlloc = allAllocations.find(a => a.channelId === ch._id && !a.subchannelId);
+        .filter((ch) => myContractor.channels.includes(ch.name))
+        .map((ch) => {
+          const rawAlloc = allAllocations.find(
+            (a) => a.channelId === ch._id && !a.subchannelId
+          );
           const alloc = rawAlloc || {
             jan: 0, feb: 0, mar: 0, apr: 0, may: 0, jun: 0,
-            jul: 0, aug: 0, sep: 0, oct: 0, nov: 0, dec: 0, year: 0
+            jul: 0, aug: 0, sep: 0, oct: 0, nov: 0, dec: 0, year: 0,
           };
-
-          // In the future you'd map subchannels here.
           return {
             id: ch._id,
             name: ch.name,
@@ -62,50 +61,77 @@ export const getBudget = query({
             oct: alloc.oct,
             nov: alloc.nov,
             dec: alloc.dec,
-            restOfYear: alloc.year - (alloc.jan + alloc.feb + alloc.mar), // Helper for UI
+            restOfYear: alloc.year - (alloc.jan + alloc.feb + alloc.mar),
             isExpanded: false,
-            subRows: [] as any[]
+            subRows: [] as any[],
           };
-      });
+        });
 
-      return {
-        id: cat._id,
-        name: cat.name,
-        channels: hydratedChannels
-      };
+      return { id: cat._id, name: cat.name, channels: hydratedChannels };
     });
 
-    // 6. Filter out any categories that have absolutely 0 channels after our filter
-    return rawResult.filter(res => res.channels.length > 0);
-  }
+    return rawResult.filter((res) => res.channels.length > 0);
+  },
 });
 
-/** Generic update mutation placeholder */
+/** Update a specific month's budget value for a channel */
 export const updateBudgetValue = mutation({
   args: {
-    channelId: v.string(),
-    subId: v.optional(v.string()),
+    channelId: v.id("channels"),
+    subId: v.optional(v.id("subchannels")),
     month: v.string(),
-    value: v.number()
+    value: v.number(),
   },
   handler: async (ctx, args) => {
-    console.log(`Updating ${args.channelId} ${args.subId || ""} ${args.month} to ${args.value}`);
-    // Once schema is populated, we would run: 
-    // ctx.db.patch(recordId, { [args.month]: args.value });
-  }
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const myContractor = await ctx.db
+      .query("contractors")
+      .withIndex("by_user", (q) => q.eq("userId", identity.subject))
+      .first();
+
+    if (!myContractor) throw new Error("No contractor profile found");
+
+    const allocation = await ctx.db
+      .query("budget_allocations")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("contractorId"), myContractor._id),
+          q.eq(q.field("channelId"), args.channelId)
+        )
+      )
+      .first();
+
+    if (!allocation) {
+      console.warn(`No allocation found for channel ${args.channelId}, month ${args.month}`);
+      return;
+    }
+
+    const validMonths = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+    if (!validMonths.includes(args.month)) {
+      throw new Error(`Invalid month: ${args.month}`);
+    }
+
+    await ctx.db.patch(allocation._id, { [args.month]: args.value });
+  },
 });
 
-/** Read the current contractor context */
+/** Read the current contractor context for the authenticated user */
 export const getContractor = query({
   args: {},
   handler: async (ctx) => {
-    const latestContractors = await ctx.db.query("contractors").order("desc").take(1);
-    if (latestContractors.length === 0) return null;
-    return latestContractors[0];
-  }
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+
+    return await ctx.db
+      .query("contractors")
+      .withIndex("by_user", (q) => q.eq("userId", identity.subject))
+      .first();
+  },
 });
 
-/** Save UI profile fields back to the contractor */
+/** Save UI profile fields back to the authenticated contractor */
 export const updateContractor = mutation({
   args: {
     firstName: v.string(),
@@ -117,13 +143,20 @@ export const updateContractor = mutation({
     address: v.optional(v.string()),
     lastName: v.optional(v.string()),
     website: v.optional(v.string()),
-    avatarUrl: v.optional(v.string())
+    avatarUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const latestContractors = await ctx.db.query("contractors").order("desc").take(1);
-    if (latestContractors.length === 0) throw new Error("No active contractor found to update");
-    
-    await ctx.db.patch(latestContractors[0]._id, {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const myContractor = await ctx.db
+      .query("contractors")
+      .withIndex("by_user", (q) => q.eq("userId", identity.subject))
+      .first();
+
+    if (!myContractor) throw new Error("No active contractor found to update");
+
+    await ctx.db.patch(myContractor._id, {
       firstName: args.firstName,
       companyName: args.companyName,
       revenueGoal: args.revenueGoal,
@@ -133,7 +166,7 @@ export const updateContractor = mutation({
       address: args.address,
       lastName: args.lastName,
       website: args.website,
-      avatarUrl: args.avatarUrl
+      avatarUrl: args.avatarUrl,
     });
-  }
+  },
 });

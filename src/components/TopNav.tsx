@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { UserButton } from "@clerk/nextjs";
 
 export default function TopNav() {
   const pathname = usePathname();
@@ -52,13 +53,7 @@ export default function TopNav() {
           <span className="material-symbols-outlined text-xl">notifications</span>
         </button>
         
-        <Link href="/profile" className="w-9 h-9 rounded-full overflow-hidden border-2 border-primary/20 hover:border-primary transition-colors hover:shadow-md cursor-pointer bg-surface-container block shrink-0">
-          <img 
-            src="https://plus.unsplash.com/premium_photo-1689539137236-b68e436248de?q=80&w=100&auto=format&fit=crop" 
-            alt="contractor profile" 
-            className="w-full h-full object-cover" 
-          />
-        </Link>
+        <UserButton />
       </div>
     </header>
   );

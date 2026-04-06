@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, Work_Sans } from "next/font/google";
 import "./globals.css";
+import { ClerkProvider } from "@clerk/nextjs";
 import ConvexClientProvider from "./ConvexClientProvider";
 
 const spaceGrotesk = Space_Grotesk({
@@ -17,7 +18,8 @@ const workSans = Work_Sans({
 
 export const metadata: Metadata = {
   title: "Clover Marketing Budget Planner",
-  description: "Exclusive access portal for Clover Growth clients. Plan and track your marketing spend.",
+  description:
+    "Exclusive access portal for Clover Growth clients. Plan and track your marketing spend.",
 };
 
 export default function RootLayout({
@@ -28,12 +30,15 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${spaceGrotesk.variable} ${workSans.variable}`}>
       <head>
-        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+          rel="stylesheet"
+        />
       </head>
       <body className="antialiased min-h-screen flex flex-col font-body bg-surface text-on-surface">
-        <ConvexClientProvider>
-          {children}
-        </ConvexClientProvider>
+        <ClerkProvider>
+          <ConvexClientProvider>{children}</ConvexClientProvider>
+        </ClerkProvider>
       </body>
     </html>
   );

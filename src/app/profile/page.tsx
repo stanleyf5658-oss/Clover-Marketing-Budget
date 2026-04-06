@@ -5,6 +5,7 @@ import TopNav from "@/components/TopNav";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { useRouter } from "next/navigation";
+import { useClerk } from "@clerk/nextjs";
 
 const formatCurrency = (val: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(val);
 
@@ -19,6 +20,7 @@ const INDUSTRY_OPTIONS = [
 
 export default function ProfilePage() {
   const router = useRouter();
+  const { signOut } = useClerk();
   const contractor = useQuery(api.budget.getContractor);
   const updateContractor = useMutation(api.budget.updateContractor);
   
@@ -220,7 +222,7 @@ export default function ProfilePage() {
                     <span className="material-symbols-outlined text-[20px]">help</span>
                     Support
                 </a>
-                <button onClick={() => router.push('/onboarding')} className="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-error rounded-lg font-medium transition-colors w-full text-left">
+                <button onClick={() => signOut()} className="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-error rounded-lg font-medium transition-colors w-full text-left">
                     <span className="material-symbols-outlined text-[20px]">logout</span>
                     Sign Out
                 </button>
