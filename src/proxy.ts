@@ -1,7 +1,11 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
-const isPublicRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"]);
+const isPublicRoute = createRouteMatcher([
+  "/sign-in(.*)",
+  "/sign-up(.*)",
+  "/unauthorized",
+]);
 const isAdminRoute = createRouteMatcher(["/admin(.*)"]);
 
 export default clerkMiddleware(async (auth, request) => {
@@ -16,12 +20,11 @@ export default clerkMiddleware(async (auth, request) => {
     if (!userId) {
       return NextResponse.redirect(new URL("/sign-in", request.url));
     }
-    // If the user has an org but is not an admin, redirect to planner
+    // If the user has an org but is not an admin, show the unauthorized page
     if (orgRole && orgRole !== "org:admin") {
-      return NextResponse.redirect(new URL("/planner", request.url));
+      return NextResponse.redirect(new URL("/unauthorized", request.url));
     }
-    // If user has no org membership yet, allow access (setup phase)
-    // The page itself shows a lock screen for non-admins as a second layer
+    // If user has no org membership yet, allow through — page shows lock screen
   }
 });
 
