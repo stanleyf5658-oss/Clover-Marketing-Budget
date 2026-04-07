@@ -480,6 +480,9 @@ export default function OnboardingPage() {
       await submitProfile({
         firstName: formData.firstName,
         companyName: formData.companyName,
+        city: formData.city || undefined,
+        websiteUrl: formData.websiteUrl || undefined,
+        services: formData.services.length > 0 ? formData.services : undefined,
         revenueGoal: Number(formData.revenueGoal),
         splitType: formData.splitType,
         marketingPercentage:

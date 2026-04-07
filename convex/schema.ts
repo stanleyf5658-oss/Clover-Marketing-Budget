@@ -21,6 +21,8 @@ export default defineSchema({
     address: v.optional(v.string()),
     lastName: v.optional(v.string()),
     website: v.optional(v.string()),
+    city: v.optional(v.string()),
+    services: v.optional(v.array(v.string())),
   }).index("by_user", ["userId"]),
 
   // Categories like "Direct Response" or "Branding"
