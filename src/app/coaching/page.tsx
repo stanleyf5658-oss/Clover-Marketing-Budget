@@ -26,7 +26,7 @@ export default function CoachingPage() {
           <div className="col-span-12 lg:col-span-8">
             <span className="inline-block px-3 py-1 bg-secondary-container text-on-secondary-container text-xs font-bold tracking-widest uppercase mb-6 rounded-lg">Architecture for Profit</span>
             <h1 className="text-6xl md:text-8xl font-headline font-bold text-on-surface leading-[0.9] tracking-tighter mb-8 shadow-sm">
-              Fuel Your Growth with <span className="text-primary">Clover Coaching</span>
+              Fuel Your Growth with <span className="text-primary">Clover Growth Partners</span>
             </h1>
             <p className="text-xl md:text-2xl text-on-surface-variant max-w-2xl font-light leading-relaxed">
               We don't just give you a spreadsheet. We build the operational framework that turns construction businesses into high-yield assets.

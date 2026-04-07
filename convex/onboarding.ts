@@ -53,6 +53,7 @@ export const submitProfile = mutation({
       "SEO / Organic Search",
       "Google Ads (PPC)",
       "Local Services Ads (LSA)",
+      "Social Media Ads (Meta/FB)",
       "Email Marketing",
     ];
 

@@ -5,7 +5,7 @@ export default defineSchema({
   // Users or contractors who own the dashboard
   contractors: defineTable({
     // Clerk user ID — links this record to the authenticated user
-    userId: v.string(),
+    userId: v.optional(v.string()),
     firstName: v.string(),
     companyName: v.string(),
     revenueGoal: v.number(),

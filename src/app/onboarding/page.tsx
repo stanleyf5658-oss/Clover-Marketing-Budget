@@ -246,7 +246,7 @@ export default function OnboardingPage() {
         const spend = calculateSpend();
         return (
           <div className="space-y-6">
-            <h2 className="text-3xl font-heading font-bold text-text-main">What percentage of revenue will you put into marketing?</h2>
+            <h2 className="text-3xl font-heading font-bold text-text-main">What percentage of revenue will you invest into marketing?</h2>
             
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[6, 8, 10].map(perc => (
