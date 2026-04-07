@@ -18,6 +18,7 @@ type FormData = {
   customPercentage: number | "";
   channels: string[];
   newChannels: string[];
+  noneExperienced: boolean; // Ken feedback #3: "None, I'm starting fresh" option
   revenueMonths: number[]; // 12 item array
   allocations: {
     [channel: string]: {
@@ -41,6 +42,20 @@ const MARKETING_CHANNELS = [
   "Email Marketing"
 ];
 
+// Ken feedback #4: Recommended allocation weights per channel type
+const CHANNEL_WEIGHTS: { [key: string]: number } = {
+  "Google Ads (PPC)": 3,
+  "Local Services Ads (LSA)": 2,
+  "SEO / Organic Search": 2,
+  "Social Media Ads (Meta/FB)": 2,
+  "Direct Mail": 1.5,
+  "Radio / Spotify": 1,
+  "TV / Cable": 1,
+  "OTT": 1,
+  "Out of Home": 1,
+  "Email Marketing": 0.5,
+};
+
 export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
@@ -57,6 +72,7 @@ export default function OnboardingPage() {
     customPercentage: "",
     channels: [],
     newChannels: [],
+    noneExperienced: false,
     revenueMonths: Array(12).fill(0),
     allocations: {}
   });
@@ -91,6 +107,33 @@ export default function OnboardingPage() {
     const goal = Number(formData.revenueGoal || 0);
     if (goal <= 10000000) return { dr: 60, brand: 40, text: "Balancing direct response with local market presence." };
     return { dr: 50, brand: 50, text: "Market dominance requires equal focus on Brand and DR." };
+  };
+
+  // Ken feedback #2: Recommend a marketing percentage based on revenue goal
+  const getRecommendedPercentage = (): number => {
+    const goal = Number(formData.revenueGoal || 0);
+    if (goal < 1000000) return 10;
+    if (goal <= 5000000) return 8;
+    return 6;
+  };
+
+  // Ken feedback #4: Pre-populate allocations with recommended monthly amounts
+  const getRecommendedAllocations = (channels: string[]) => {
+    const yearlyBudget = calculateSpend().year;
+    if (!yearlyBudget || channels.length === 0) {
+      return channels.reduce((acc, ch) => {
+        acc[ch] = { isFlat: true, flatAmount: 0, customMonths: Array(12).fill(0) };
+        return acc;
+      }, {} as FormData["allocations"]);
+    }
+
+    const totalWeight = channels.reduce((sum, ch) => sum + (CHANNEL_WEIGHTS[ch] ?? 1), 0);
+    return channels.reduce((acc, ch) => {
+      const weight = CHANNEL_WEIGHTS[ch] ?? 1;
+      const monthlyAmount = Math.round((yearlyBudget * (weight / totalWeight)) / 12 / 100) * 100;
+      acc[ch] = { isFlat: true, flatAmount: monthlyAmount, customMonths: Array(12).fill(monthlyAmount) };
+      return acc;
+    }, {} as FormData["allocations"]);
   };
 
   const handleFinish = async () => {
@@ -186,7 +229,8 @@ export default function OnboardingPage() {
           </div>
         );
 
-      case 3:
+      case 3: {
+        // Ken feedback #1: Pre-populate months with even split; let user adjust
         const targetRev = Number(formData.revenueGoal || 0);
         const allocatedRev = formData.revenueMonths.reduce((a, b) => a + b, 0);
         const remainingRev = targetRev - allocatedRev;
@@ -196,11 +240,25 @@ export default function OnboardingPage() {
           newArr[idx] = val;
           setFormData({ ...formData, revenueMonths: newArr });
         };
+
+        const distributeEvenly = () => {
+          const evenAmount = Math.round(targetRev / 12);
+          // Distribute evenly, with any rounding remainder added to December
+          const months = Array(12).fill(evenAmount);
+          const diff = targetRev - evenAmount * 12;
+          months[11] += diff;
+          setFormData({ ...formData, revenueMonths: months });
+        };
+
+        // Auto-distribute evenly when step first renders if all months are 0
+        const allZero = formData.revenueMonths.every(m => m === 0);
         
         return (
           <div className="space-y-6 w-full max-w-2xl mx-auto">
-            <h2 className="text-3xl font-heading font-bold text-text-main">How should we spread your revenue goal across the year?</h2>
-            <p className="text-text-muted text-[15px]">Clover recommends setting up custom monthly goals and avoiding flat 12-month splits to account for true seasonality.</p>
+            <div>
+              <h2 className="text-3xl font-heading font-bold text-text-main mb-2">How should we spread your revenue goal across the year?</h2>
+              <p className="text-text-muted text-[15px]">We've pre-filled an even monthly split to get you started. Adjust any month to match your seasonality.</p>
+            </div>
 
             <div className="sticky top-0 bg-white p-4 shadow-sm z-10 rounded-[12px] border border-gray-100 flex justify-between items-center mb-6">
                <div className="space-x-3">
@@ -213,6 +271,15 @@ export default function OnboardingPage() {
             </div>
             
             <div className="bg-surface rounded-xl border border-gray-200 p-5 shadow-sm">
+              <div className="flex justify-between items-center mb-4">
+                <p className="text-[13px] font-bold text-text-muted uppercase tracking-wider">Monthly Targets</p>
+                <button
+                  onClick={distributeEvenly}
+                  className="text-[13px] font-bold text-primary hover:underline"
+                >
+                  Distribute Evenly
+                </button>
+              </div>
               <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
                  {["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].map((m, idx) => (
                    <div key={m}>
@@ -236,32 +303,74 @@ export default function OnboardingPage() {
             <div className="pt-4 flex items-center justify-between">
               <Button variant="ghost" onClick={prevStep}>Back</Button>
               <div className="flex gap-3">
+                {allZero && (
+                  <Button variant="ghost" onClick={() => { distributeEvenly(); nextStep(); }}>
+                    Use Even Split &rarr;
+                  </Button>
+                )}
                 <Button onClick={nextStep}>Next &rarr;</Button>
               </div>
             </div>
           </div>
         );
+      }
 
-      case 4:
+      case 4: {
+        // Ken feedback #2: Auto-select recommended percentage with explanation
         const spend = calculateSpend();
+        const recommendedPerc = getRecommendedPercentage();
+
+        const handleStepEntry = () => {
+          // If nothing selected yet, pre-select the recommendation
+          if (formData.marketingPercentage === "") {
+            setFormData({ ...formData, marketingPercentage: recommendedPerc, customPercentage: "" });
+          }
+        };
+
+        // Trigger pre-selection on first render of this step
+        if (formData.marketingPercentage === "") {
+          setTimeout(() => {
+            setFormData(prev => prev.marketingPercentage === "" 
+              ? { ...prev, marketingPercentage: recommendedPerc, customPercentage: "" }
+              : prev
+            );
+          }, 0);
+        }
+
         return (
           <div className="space-y-6">
-            <h2 className="text-3xl font-heading font-bold text-text-main">What percentage of revenue will you invest into marketing?</h2>
+            <div>
+              <h2 className="text-3xl font-heading font-bold text-text-main mb-2">What percentage of revenue will you invest into marketing?</h2>
+              <p className="text-text-muted text-[15px]">
+                Based on your revenue goal, we recommend <strong className="text-text-main">{recommendedPerc}%</strong>. You can adjust this below.
+              </p>
+            </div>
             
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {[6, 8, 10].map(perc => (
-                <button
-                  key={perc}
-                  onClick={() => setFormData({ ...formData, marketingPercentage: perc, customPercentage: "" })}
-                  className={`py-3 px-4 rounded-[8px] font-bold border transition-colors ${
-                    formData.marketingPercentage === perc 
-                      ? "bg-primary text-white border-primary shadow-sm" 
-                      : "bg-surface text-text-main border-gray-200 hover:border-gray-300"
-                  }`}
-                >
-                  {perc}%
-                </button>
-              ))}
+              {[6, 8, 10].map(perc => {
+                const isSelected = formData.marketingPercentage === perc;
+                const isRecommended = perc === recommendedPerc;
+                return (
+                  <button
+                    key={perc}
+                    onClick={() => setFormData({ ...formData, marketingPercentage: perc, customPercentage: "" })}
+                    className={`relative py-3 px-4 rounded-[8px] font-bold border transition-colors ${
+                      isSelected 
+                        ? "bg-primary text-white border-primary shadow-sm" 
+                        : "bg-surface text-text-main border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    {isRecommended && (
+                      <span className={`absolute -top-2.5 left-1/2 -translate-x-1/2 text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${
+                        isSelected ? "bg-white text-primary" : "bg-primary text-white"
+                      }`}>
+                        Recommended
+                      </span>
+                    )}
+                    {perc}%
+                  </button>
+                );
+              })}
               <button
                 onClick={() => setFormData({ ...formData, marketingPercentage: "custom" })}
                 className={`py-3 px-4 rounded-[8px] font-bold border transition-colors ${
@@ -312,8 +421,9 @@ export default function OnboardingPage() {
             </div>
           </div>
         );
+      }
 
-      case 5:
+      case 5: {
         const rec = getRecommendation();
         const yearlyTotal = calculateSpend().year;
         return (
@@ -342,8 +452,9 @@ export default function OnboardingPage() {
             </div>
           </div>
         );
+      }
 
-      case 6:
+      case 6: {
         const toggleChannel = (channel: string) => {
           const arr = formData.channels;
           let newAllocations = { ...formData.allocations };
@@ -392,15 +503,25 @@ export default function OnboardingPage() {
             </div>
           </div>
         );
+      }
 
-      case 7:
+      case 7: {
+        // Ken feedback #3: Flip question to "Which have you used?" + add "None — I'm starting fresh"
         const toggleNewChannel = (channel: string) => {
           const arr = formData.newChannels;
           if (arr.includes(channel)) {
-            setFormData({ ...formData, newChannels: arr.filter(c => c !== channel) });
+            setFormData({ ...formData, newChannels: arr.filter(c => c !== channel), noneExperienced: false });
           } else {
-            setFormData({ ...formData, newChannels: [...arr, channel] });
+            setFormData({ ...formData, newChannels: [...arr, channel], noneExperienced: false });
           }
+        };
+
+        const toggleNoneExperienced = () => {
+          setFormData({ 
+            ...formData, 
+            noneExperienced: !formData.noneExperienced, 
+            newChannels: !formData.noneExperienced ? [] : formData.newChannels 
+          });
         };
 
         const TESTABLE_CHANNELS = [
@@ -416,7 +537,7 @@ export default function OnboardingPage() {
         return (
           <div className="space-y-6">
             <div>
-              <h2 className="text-3xl font-heading font-bold text-text-main mb-2">Are you new to any of these channels?</h2>
+              <h2 className="text-3xl font-heading font-bold text-text-main mb-2">Which of these channels have you used before?</h2>
               <p className="text-text-muted text-[15px]">We'll tailor our budget coaching based on your experience.</p>
             </div>
             
@@ -432,21 +553,45 @@ export default function OnboardingPage() {
                     <button
                       key={ch}
                       onClick={() => toggleNewChannel(ch)}
+                      disabled={formData.noneExperienced}
                       className={`w-full flex items-center p-4 rounded-[12px] border-2 text-left transition-all ${
-                        isSelected ? "bg-branding-row border-primary" : "bg-surface border-gray-200 hover:border-gray-300"
+                        formData.noneExperienced
+                          ? "opacity-40 cursor-not-allowed bg-surface border-gray-200"
+                          : isSelected 
+                            ? "bg-branding-row border-primary" 
+                            : "bg-surface border-gray-200 hover:border-gray-300"
                       }`}
                     >
                       <div className={`w-5 h-5 rounded border mr-3 flex items-center justify-center flex-shrink-0 ${
-                        isSelected ? "bg-primary border-primary text-white" : "border-gray-300"
+                        isSelected && !formData.noneExperienced ? "bg-primary border-primary text-white" : "border-gray-300"
                       }`}>
-                        {isSelected && <Check className="w-3.5 h-3.5" />}
+                        {isSelected && !formData.noneExperienced && <Check className="w-3.5 h-3.5" />}
                       </div>
-                      <span className={`text-[16px] font-bold ${isSelected ? "text-primary" : "text-text-main"}`}>
+                      <span className={`text-[16px] font-bold ${isSelected && !formData.noneExperienced ? "text-primary" : "text-text-main"}`}>
                         {ch}
                       </span>
                     </button>
                   )
                 })}
+
+                {/* Ken feedback #3: "None — I'm starting fresh" option */}
+                <button
+                  onClick={toggleNoneExperienced}
+                  className={`w-full flex items-center p-4 rounded-[12px] border-2 text-left transition-all ${
+                    formData.noneExperienced 
+                      ? "bg-branding-row border-primary" 
+                      : "bg-surface border-gray-200 hover:border-gray-300"
+                  }`}
+                >
+                  <div className={`w-5 h-5 rounded border mr-3 flex items-center justify-center flex-shrink-0 ${
+                    formData.noneExperienced ? "bg-primary border-primary text-white" : "border-gray-300"
+                  }`}>
+                    {formData.noneExperienced && <Check className="w-3.5 h-3.5" />}
+                  </div>
+                  <span className={`text-[16px] font-bold ${formData.noneExperienced ? "text-primary" : "text-text-main"}`}>
+                    None — I'm starting fresh
+                  </span>
+                </button>
               </div>
             )}
 
@@ -458,8 +603,9 @@ export default function OnboardingPage() {
             </div>
           </div>
         );
+      }
 
-      case 8:
+      case 8: {
         const currentTargetSpend = calculateSpend().year;
         
         let allocatedAmount = 0;
@@ -486,9 +632,31 @@ export default function OnboardingPage() {
           updateAllocation(ch, "customMonths", arr);
         };
 
+        // Ken feedback #4: Pre-populate allocations with recommended amounts on first render
+        const allBlank = formData.channels.every(ch => {
+          const a = formData.allocations[ch];
+          return !a || (a.flatAmount === 0 && a.customMonths.every(v => v === 0));
+        });
+
+        if (allBlank && formData.channels.length > 0) {
+          setTimeout(() => {
+            setFormData(prev => {
+              const stillBlank = prev.channels.every(ch => {
+                const a = prev.allocations[ch];
+                return !a || (a.flatAmount === 0 && a.customMonths.every(v => v === 0));
+              });
+              if (!stillBlank) return prev;
+              return { ...prev, allocations: getRecommendedAllocations(prev.channels) };
+            });
+          }, 0);
+        }
+
         return (
           <div className="space-y-6 w-full max-w-2xl mx-auto">
-            <h2 className="text-3xl font-heading font-bold text-text-main">Allocate your Marketing Budget</h2>
+            <div>
+              <h2 className="text-3xl font-heading font-bold text-text-main mb-1">Allocate your Marketing Budget</h2>
+              <p className="text-text-muted text-[15px]">We've pre-filled recommended monthly amounts based on your budget and channels. Adjust any field to match your plan.</p>
+            </div>
             
             <div className="sticky top-0 bg-white p-4 shadow-sm z-10 rounded-[12px] border border-gray-100 flex justify-between items-center mb-6">
                <div className="space-x-3">
@@ -530,7 +698,11 @@ export default function OnboardingPage() {
                     )}
 
                     <div className="flex justify-between items-center mb-4">
-                      <h3 className="font-bold text-lg text-text-main">{ch} <span className="text-sm font-medium text-text-muted ml-2">({formatCurrency(totalForCard)}/yr)</span></h3>
+                      <div>
+                        <h3 className="font-bold text-lg text-text-main">{ch} <span className="text-sm font-medium text-text-muted ml-2">({formatCurrency(totalForCard)}/yr)</span></h3>
+                        {/* Ken feedback #4: Label pre-filled amounts as recommendations */}
+                        <p className="text-[12px] text-text-muted mt-0.5">Recommended — adjust to match your plan</p>
+                      </div>
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input type="checkbox" checked={alloc.isFlat} onChange={(e) => updateAllocation(ch, "isFlat", e.target.checked)} className="rounded border-gray-300 text-primary focus:ring-primary"/>
                         <span className="text-sm font-medium text-text-muted">Same amount every month</span>
@@ -585,8 +757,9 @@ export default function OnboardingPage() {
             </div>
           </div>
         );
+      }
 
-      case 9:
+      case 9: {
         const finalSpend = calculateSpend();
         return (
           <div className="space-y-6">
@@ -619,6 +792,7 @@ export default function OnboardingPage() {
             </div>
           </div>
         );
+      }
 
       default:
         return null;
