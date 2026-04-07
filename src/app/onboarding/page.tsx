@@ -16,6 +16,7 @@ type ServiceOption = "hvac" | "hvac_plumbing" | "hvac_plumbing_electrical" | "ot
 type FormData = {
   firstName: string;
   companyName: string;
+  city: string;
   websiteUrl: string;
   services: ServiceOption[];
   otherServices: string;
@@ -146,45 +147,181 @@ function getSeasonalDistribution(
   return months;
 }
 
-// ─── Helper to extract state from a website URL via a simple geocode lookup ──
-// We use the ipapi / open-meteo approach: fetch the website, extract domain,
-// then use a free geocoding API to get the state. As a fallback we use "mixed".
-async function inferStateFromWebsite(url: string): Promise<string> {
+// ─── Real geocoding: resolve city/state string → US state abbreviation ─────
+// Uses the free OpenCage Geocoding API (no key required for low-volume use).
+// Falls back to a hardcoded US city→state map for instant offline resolution.
+async function inferStateFromCity(cityInput: string): Promise<string> {
+  if (!cityInput || !cityInput.trim()) return "";
+
+  // ── Fast offline lookup first (covers the most common US cities) ──────────
+  const cityStateMap: Record<string, string> = {
+    // Texas
+    "houston": "TX", "dallas": "TX", "austin": "TX", "san antonio": "TX",
+    "fort worth": "TX", "el paso": "TX", "arlington": "TX", "corpus christi": "TX",
+    "plano": "TX", "lubbock": "TX", "laredo": "TX", "irving": "TX",
+    // Florida
+    "miami": "FL", "orlando": "FL", "tampa": "FL", "jacksonville": "FL",
+    "st. petersburg": "FL", "hialeah": "FL", "tallahassee": "FL", "fort lauderdale": "FL",
+    "pembroke pines": "FL", "cape coral": "FL",
+    // Arizona
+    "phoenix": "AZ", "tucson": "AZ", "scottsdale": "AZ", "mesa": "AZ",
+    "chandler": "AZ", "gilbert": "AZ", "glendale": "AZ", "tempe": "AZ",
+    // Illinois
+    "chicago": "IL", "aurora": "IL", "naperville": "IL", "joliet": "IL",
+    "rockford": "IL", "springfield": "IL",
+    // New York
+    "new york": "NY", "nyc": "NY", "brooklyn": "NY", "queens": "NY",
+    "buffalo": "NY", "rochester": "NY", "yonkers": "NY", "syracuse": "NY",
+    // California
+    "los angeles": "CA", "san diego": "CA", "san francisco": "CA", "sacramento": "CA",
+    "san jose": "CA", "fresno": "CA", "long beach": "CA", "oakland": "CA",
+    "bakersfield": "CA", "anaheim": "CA", "riverside": "CA", "stockton": "CA",
+    // Washington
+    "seattle": "WA", "spokane": "WA", "tacoma": "WA", "bellevue": "WA",
+    // Oregon
+    "portland": "OR", "eugene": "OR", "salem": "OR",
+    // Colorado
+    "denver": "CO", "boulder": "CO", "colorado springs": "CO", "aurora co": "CO",
+    // Georgia
+    "atlanta": "GA", "savannah": "GA", "augusta": "GA", "columbus ga": "GA",
+    // North Carolina
+    "charlotte": "NC", "raleigh": "NC", "greensboro": "NC", "durham": "NC",
+    // Tennessee
+    "nashville": "TN", "memphis": "TN", "knoxville": "TN", "chattanooga": "TN",
+    // Minnesota
+    "minneapolis": "MN", "st. paul": "MN", "rochester mn": "MN",
+    // Wisconsin
+    "milwaukee": "WI", "madison": "WI", "green bay": "WI",
+    // Michigan
+    "detroit": "MI", "grand rapids": "MI", "warren": "MI", "sterling heights": "MI",
+    // Ohio
+    "cleveland": "OH", "columbus": "OH", "cincinnati": "OH", "toledo": "OH", "akron": "OH",
+    // Pennsylvania
+    "pittsburgh": "PA", "philadelphia": "PA", "allentown": "PA",
+    // Massachusetts
+    "boston": "MA", "worcester": "MA", "springfield ma": "MA",
+    // Nevada
+    "las vegas": "NV", "henderson": "NV", "reno": "NV",
+    // Utah
+    "salt lake city": "UT", "slc": "UT", "provo": "UT", "west valley city": "UT",
+    // New Mexico
+    "albuquerque": "NM", "santa fe": "NM",
+    // Missouri
+    "kansas city": "MO", "st. louis": "MO", "springfield mo": "MO",
+    // Nebraska
+    "omaha": "NE", "lincoln": "NE",
+    // Indiana
+    "indianapolis": "IN", "fort wayne": "IN",
+    // Kentucky
+    "louisville": "KY", "lexington": "KY",
+    // Virginia
+    "richmond": "VA", "norfolk": "VA", "virginia beach": "VA", "chesapeake": "VA",
+    // Maryland
+    "baltimore": "MD",
+    // DC
+    "washington": "DC", "washington dc": "DC",
+    // New Jersey
+    "newark": "NJ", "jersey city": "NJ", "paterson": "NJ",
+    // Louisiana
+    "new orleans": "LA", "baton rouge": "LA", "shreveport": "LA",
+    // Mississippi
+    "jackson": "MS", "gulfport": "MS",
+    // Alabama
+    "birmingham": "AL", "montgomery": "AL", "huntsville": "AL",
+    // South Carolina
+    "columbia": "SC", "charleston": "SC", "greenville": "SC",
+    // Oklahoma
+    "oklahoma city": "OK", "tulsa": "OK",
+    // Arkansas
+    "little rock": "AR",
+    // Iowa
+    "des moines": "IA", "cedar rapids": "IA",
+    // Kansas
+    "wichita": "KS", "overland park": "KS",
+    // Connecticut
+    "bridgeport": "CT", "new haven": "CT", "hartford": "CT",
+    // Rhode Island
+    "providence": "RI",
+    // New Hampshire
+    "manchester": "NH", "nashua": "NH",
+    // Maine
+    "portland me": "ME", "lewiston": "ME",
+    // Vermont
+    "burlington": "VT",
+    // North Dakota
+    "fargo": "ND", "bismarck": "ND",
+    // South Dakota
+    "sioux falls": "SD", "rapid city": "SD",
+    // Montana
+    "billings": "MT", "missoula": "MT",
+    // Wyoming
+    "cheyenne": "WY", "casper": "WY",
+    // Idaho
+    "boise": "ID", "nampa": "ID",
+    // Alaska
+    "anchorage": "AK", "fairbanks": "AK",
+    // Hawaii
+    "honolulu": "HI", "hilo": "HI",
+  };
+
+  // Also handle "City, ST" or "City, State" format — extract just the city part
+  const normalized = cityInput.trim().toLowerCase().replace(/,.*$/, "").trim();
+
+  // Direct match
+  if (cityStateMap[normalized]) return cityStateMap[normalized];
+
+  // Partial match (e.g. "Houston TX" → "houston")
+  for (const [city, state] of Object.entries(cityStateMap)) {
+    if (normalized.includes(city)) return state;
+  }
+
+  // ── Check if user typed a state abbreviation directly (e.g. "TX", "FL") ──
+  const stateAbbr = cityInput.trim().toUpperCase();
+  const validStates = [
+    "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA",
+    "HI","ID","IL","IN","IA","KS","KY","LA","ME","MD",
+    "MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
+    "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
+    "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","DC"
+  ];
+  if (validStates.includes(stateAbbr)) return stateAbbr;
+
+  // ── Try OpenCage free geocoding API as final fallback ─────────────────────
   try {
-    // Try to extract a city/state hint from the domain name itself
-    // e.g. "dallashvac.com" → "TX", "chicagoplumbing.com" → "IL"
-    const cityStateMap: Record<string, string> = {
-      dallas: "TX", houston: "TX", austin: "TX", sanantonio: "TX",
-      miami: "FL", orlando: "FL", tampa: "FL", jacksonville: "FL",
-      phoenix: "AZ", tucson: "AZ", scottsdale: "AZ",
-      chicago: "IL", springfield: "IL",
-      newyork: "NY", nyc: "NY", brooklyn: "NY",
-      losangeles: "CA", sandiego: "CA", sanfrancisco: "CA", sacramento: "CA",
-      seattle: "WA", portland: "OR",
-      denver: "CO", boulder: "CO",
-      atlanta: "GA", charlotte: "NC", raleigh: "NC",
-      nashville: "TN", memphis: "TN",
-      minneapolis: "MN", milwaukee: "WI",
-      detroit: "MI", cleveland: "OH", columbus: "OH", cincinnati: "OH",
-      pittsburgh: "PA", philadelphia: "PA",
-      boston: "MA", providence: "RI",
-      lasvegas: "NV", reno: "NV",
-      saltlake: "UT", slc: "UT",
-      albuquerque: "NM",
-      omaha: "NE", kansascity: "MO", stlouis: "MO",
-      indianapolis: "IN", louisville: "KY",
-      richmond: "VA", norfolk: "VA",
-      baltimore: "MD", washington: "DC",
-      newark: "NJ",
-    };
-    const domain = url.replace(/https?:\/\//, "").replace(/www\./, "").split(".")[0].toLowerCase().replace(/[-_\s]/g, "");
-    for (const [city, state] of Object.entries(cityStateMap)) {
-      if (domain.includes(city)) return state;
+    const query = encodeURIComponent(cityInput.trim() + ", USA");
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${query}&countrycodes=us&limit=1&format=json&addressdetails=1`,
+      { headers: { "Accept-Language": "en" } }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.length > 0) {
+        const addr = data[0].address;
+        // Nominatim returns state as full name — map to abbreviation
+        const stateNameMap: Record<string, string> = {
+          "alabama":"AL","alaska":"AK","arizona":"AZ","arkansas":"AR",
+          "california":"CA","colorado":"CO","connecticut":"CT","delaware":"DE",
+          "florida":"FL","georgia":"GA","hawaii":"HI","idaho":"ID",
+          "illinois":"IL","indiana":"IN","iowa":"IA","kansas":"KS",
+          "kentucky":"KY","louisiana":"LA","maine":"ME","maryland":"MD",
+          "massachusetts":"MA","michigan":"MI","minnesota":"MN","mississippi":"MS",
+          "missouri":"MO","montana":"MT","nebraska":"NE","nevada":"NV",
+          "new hampshire":"NH","new jersey":"NJ","new mexico":"NM","new york":"NY",
+          "north carolina":"NC","north dakota":"ND","ohio":"OH","oklahoma":"OK",
+          "oregon":"OR","pennsylvania":"PA","rhode island":"RI","south carolina":"SC",
+          "south dakota":"SD","tennessee":"TN","texas":"TX","utah":"UT",
+          "vermont":"VT","virginia":"VA","washington":"WA","west virginia":"WV",
+          "wisconsin":"WI","wyoming":"WY","district of columbia":"DC"
+        };
+        const stateName = (addr.state || "").toLowerCase();
+        if (stateNameMap[stateName]) return stateNameMap[stateName];
+      }
     }
   } catch {
-    // ignore
+    // Network error — fall through to default
   }
-  return ""; // unknown → caller will use "mixed"
+
+  return ""; // unknown → caller will use "mixed" climate zone
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -200,6 +337,7 @@ export default function OnboardingPage() {
   const [formData, setFormData] = useState<FormData>({
     firstName: "",
     companyName: "",
+    city: "",
     websiteUrl: "",
     services: [],
     otherServices: "",
@@ -221,7 +359,8 @@ export default function OnboardingPage() {
       const allZero = formData.revenueMonths.every((m) => m === 0);
       if (allZero) {
         (async () => {
-          const state = await inferStateFromWebsite(formData.websiteUrl);
+          // Use the city the user entered in Step 1 for real geocoding
+          const state = await inferStateFromCity(formData.city);
           const months = getSeasonalDistribution(
             Number(formData.revenueGoal),
             formData.services,
@@ -377,6 +516,7 @@ export default function OnboardingPage() {
         const canProceed =
           formData.firstName.trim() &&
           formData.companyName.trim() &&
+          formData.city.trim() &&
           formData.services.length > 0;
 
         return (
@@ -409,6 +549,25 @@ export default function OnboardingPage() {
                   onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
                   placeholder="Clover HVAC Services"
                 />
+              </div>
+
+              {/* City / Location */}
+              <div>
+                <label className="block text-[15px] font-bold text-text-main mb-2">
+                  City or Metro Area
+                </label>
+                <Input
+                  value={formData.city}
+                  onChange={(e) => {
+                    setFormData({ ...formData, city: e.target.value, revenueMonths: Array(12).fill(0) });
+                    // Reset seasonal flag so it recalculates when they reach step 3
+                    setSeasonalApplied(false);
+                  }}
+                  placeholder="e.g. Houston, TX"
+                />
+                <p className="text-[12px] text-text-muted mt-1">
+                  Used to calculate seasonal demand patterns for your market.
+                </p>
               </div>
 
               {/* Website URL */}
@@ -573,7 +732,7 @@ export default function OnboardingPage() {
         };
 
         const distributeSeasonally = async () => {
-          const state = await inferStateFromWebsite(formData.websiteUrl);
+          const state = await inferStateFromCity(formData.city);
           const months = getSeasonalDistribution(targetRev, formData.services, state || "mixed");
           setFormData({ ...formData, revenueMonths: months, splitType: "custom" });
         };
