@@ -195,6 +195,8 @@ export default function OnboardingPage() {
   const totalSteps = 9;
   const submitProfile = useMutation(api.onboarding.submitProfile);
 
+  const [seasonalApplied, setSeasonalApplied] = useState(false);
+
   const [formData, setFormData] = useState<FormData>({
     firstName: "",
     companyName: "",
@@ -212,6 +214,26 @@ export default function OnboardingPage() {
     allocations: {},
     allocationsUserEdited: false,
   });
+
+  // ── Auto-apply seasonal distribution when entering step 3 ─────────────────
+  useEffect(() => {
+    if (step === 3 && !seasonalApplied && Number(formData.revenueGoal) > 0) {
+      const allZero = formData.revenueMonths.every((m) => m === 0);
+      if (allZero) {
+        (async () => {
+          const state = await inferStateFromWebsite(formData.websiteUrl);
+          const months = getSeasonalDistribution(
+            Number(formData.revenueGoal),
+            formData.services,
+            state || "mixed"
+          );
+          setFormData((prev) => ({ ...prev, revenueMonths: months, splitType: "custom" }));
+          setSeasonalApplied(true);
+        })();
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   // ── Track previous upstream values to detect changes ──────────────────────
   const prevUpstreamRef = useRef({
@@ -557,14 +579,6 @@ export default function OnboardingPage() {
         };
 
         const allZero = formData.revenueMonths.every((m) => m === 0);
-
-        // Auto-populate with seasonal distribution on first entry
-        useEffect(() => {
-          if (allZero && targetRev > 0) {
-            distributeSeasonally();
-          }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        }, []);
 
         return (
           <div className="space-y-6 w-full max-w-2xl mx-auto">
