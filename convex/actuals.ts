@@ -18,22 +18,27 @@ export const getActiveMetrics = query({
 
     if (!myContractor) return [];
 
-    // Fetch categories and deduplicate safely
-    const rawCategories = await ctx.db.query("categories").collect();
-    const categoriesMap = new Map();
-    rawCategories.forEach((cat) => {
-      if (!categoriesMap.has(cat.name)) categoriesMap.set(cat.name, cat);
-    });
-    const categories = Array.from(categoriesMap.values()).sort(
-      (a, b) => a.orderIndex - b.orderIndex
-    );
-
-    const allChannels = await ctx.db.query("channels").collect();
-    const allBudgets = await ctx.db
+    // Fetch ONLY this contractor's budget allocations
+    const myBudgets = await ctx.db
       .query("budget_allocations")
       .filter((q) => q.eq(q.field("contractorId"), myContractor._id))
       .collect();
 
+    if (myBudgets.length === 0) return [];
+
+    // Collect the unique channel IDs and category IDs from this contractor's allocations
+    const channelIds = Array.from(new Set(myBudgets.map((b) => b.channelId)));
+    const categoryIds = Array.from(new Set(myBudgets.map((b) => b.categoryId)));
+
+    // Fetch only the channels and categories referenced by this contractor
+    const channels = await Promise.all(channelIds.map((id) => ctx.db.get(id)));
+    const categories = await Promise.all(categoryIds.map((id) => ctx.db.get(id)));
+
+    const validChannels = channels.filter(Boolean) as NonNullable<typeof channels[0]>[];
+    const validCategories = (categories.filter(Boolean) as NonNullable<typeof categories[0]>[])
+      .sort((a, b) => a.orderIndex - b.orderIndex);
+
+    // Fetch performance metrics for this contractor/month/year
     const allPerformanceMetrics = await ctx.db
       .query("performance_metrics")
       .filter((q) =>
@@ -45,30 +50,29 @@ export const getActiveMetrics = query({
       )
       .collect();
 
-    const rawResult = categories.map((cat) => {
-      const myCategoryChannels = allChannels
+    // Build result grouped by category
+    const rawResult = validCategories.map((cat) => {
+      const myCategoryChannels = validChannels
         .filter((c) => c.categoryId === cat._id)
         .sort((a, b) => a.orderIndex - b.orderIndex);
 
-      const hydratedChannels = myCategoryChannels
-        .filter((ch) => myContractor.channels.includes(ch.name))
-        .map((ch) => {
-          const mappedBudget = allBudgets.find((b) => b.channelId === ch._id);
-          const plannedSpend = mappedBudget
-            ? (mappedBudget as any)[args.month] || 0
-            : 0;
-          const tracking = allPerformanceMetrics.find(
-            (m) => m.channelId === ch._id
-          );
-          return {
-            id: ch._id,
-            name: ch.name,
-            plannedSpend,
-            actualSpend: tracking ? tracking.actualSpend : 0,
-            leads: tracking ? tracking.actualLeads : 0,
-            revenue: tracking ? tracking.actualRevenue : 0,
-          };
-        });
+      const hydratedChannels = myCategoryChannels.map((ch) => {
+        const mappedBudget = myBudgets.find((b) => b.channelId === ch._id);
+        const plannedSpend = mappedBudget
+          ? (mappedBudget as any)[args.month] ?? 0
+          : 0;
+        const tracking = allPerformanceMetrics.find(
+          (m) => m.channelId === ch._id
+        );
+        return {
+          id: ch._id,
+          name: ch.name,
+          plannedSpend,
+          actualSpend: tracking ? tracking.actualSpend : 0,
+          leads: tracking ? tracking.actualLeads : 0,
+          revenue: tracking ? tracking.actualRevenue : 0,
+        };
+      });
 
       return { id: cat._id, name: cat.name, channels: hydratedChannels };
     });
