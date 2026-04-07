@@ -9,6 +9,7 @@
  */
 
 import type * as actuals from "../actuals.js";
+import type * as admin from "../admin.js";
 import type * as budget from "../budget.js";
 import type * as onboarding from "../onboarding.js";
 
@@ -20,6 +21,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   actuals: typeof actuals;
+  admin: typeof admin;
   budget: typeof budget;
   onboarding: typeof onboarding;
 }>;
