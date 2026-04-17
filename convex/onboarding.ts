@@ -3,7 +3,6 @@ import { v } from "convex/values";
 
 export const submitProfile = mutation({
   args: {
-    userId: v.string(),
     firstName: v.string(),
     companyName: v.string(),
     city: v.optional(v.string()),
@@ -18,8 +17,10 @@ export const submitProfile = mutation({
     allocations: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const userId = args.userId;
-    if (!userId) throw new Error("Missing userId");
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const userId = identity.subject;
 
     // Prevent duplicate profiles for the same user
     const existing = await ctx.db

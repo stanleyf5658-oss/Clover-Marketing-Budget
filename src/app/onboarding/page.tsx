@@ -332,9 +332,7 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(1);
   const totalSteps = 9;
   const submitProfile = useMutation(api.onboarding.submitProfile);
-  const { userId, isLoaded: isAuthLoaded } = useAuth();
-  const userIdRef = useRef(userId);
-  useEffect(() => { userIdRef.current = userId; }, [userId]);
+  const { isLoaded: isAuthLoaded } = useAuth();
 
   const [seasonalApplied, setSeasonalApplied] = useState(false);
 
@@ -481,22 +479,7 @@ export default function OnboardingPage() {
 
   const handleFinish = async () => {
     try {
-      // Wait for Clerk to load and get the userId
-      let clerkUserId = userIdRef.current;
-      if (!clerkUserId) {
-        let waited = 0;
-        while (!userIdRef.current && waited < 5000) {
-          await new Promise((r) => setTimeout(r, 200));
-          waited += 200;
-        }
-        clerkUserId = userIdRef.current;
-        if (!clerkUserId) {
-          alert("You must be signed in to save your profile. Please sign in and try again.");
-          return;
-        }
-      }
       await submitProfile({
-        userId: clerkUserId,
         firstName: formData.firstName,
         companyName: formData.companyName,
         city: formData.city || undefined,
