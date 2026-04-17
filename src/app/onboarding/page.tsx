@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowRight, Check, ChevronDown } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMutation, useConvexAuth } from "convex/react";
+import { useMutation } from "convex/react";
+import { useAuth } from "@clerk/nextjs";
 import { api } from "../../../convex/_generated/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -331,9 +332,9 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(1);
   const totalSteps = 9;
   const submitProfile = useMutation(api.onboarding.submitProfile);
-  const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
-  const isAuthenticatedRef = useRef(isAuthenticated);
-  useEffect(() => { isAuthenticatedRef.current = isAuthenticated; }, [isAuthenticated]);
+  const { isSignedIn, isLoaded: isAuthLoaded, getToken } = useAuth();
+  const isSignedInRef = useRef(isSignedIn);
+  useEffect(() => { isSignedInRef.current = isSignedIn; }, [isSignedIn]);
 
   const [seasonalApplied, setSeasonalApplied] = useState(false);
 
@@ -480,18 +481,20 @@ export default function OnboardingPage() {
 
   const handleFinish = async () => {
     try {
-      // Wait up to 4 seconds for Convex auth token to be ready
-      if (!isAuthenticatedRef.current) {
+      // Ensure Clerk session is ready before calling Convex mutation
+      if (!isSignedInRef.current) {
         let waited = 0;
-        while (!isAuthenticatedRef.current && waited < 4000) {
+        while (!isSignedInRef.current && waited < 5000) {
           await new Promise((r) => setTimeout(r, 200));
           waited += 200;
         }
-        if (!isAuthenticatedRef.current) {
-          alert("Authentication is still loading. Please try again in a moment.");
+        if (!isSignedInRef.current) {
+          alert("You must be signed in to save your profile. Please sign in and try again.");
           return;
         }
       }
+      // Warm up the Clerk token so Convex receives it
+      await getToken({ template: "convex" }).catch(() => getToken());
       await submitProfile({
         firstName: formData.firstName,
         companyName: formData.companyName,
@@ -1505,8 +1508,8 @@ export default function OnboardingPage() {
               <Button variant="ghost" onClick={prevStep}>
                 Back
               </Button>
-              <Button onClick={handleFinish} disabled={isAuthLoading} className="w-full sm:w-auto">
-                {isAuthLoading ? "Loading..." : <>Go to my budget planner <ArrowRight className="w-4 h-4 ml-2" /></>}
+              <Button onClick={handleFinish} disabled={!isAuthLoaded} className="w-full sm:w-auto">
+                {!isAuthLoaded ? "Loading..." : <>Go to my budget planner <ArrowRight className="w-4 h-4 ml-2" /></>}
               </Button>
             </div>
           </div>
