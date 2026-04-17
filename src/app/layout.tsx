@@ -18,9 +18,33 @@ const workSans = Work_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Clover Marketing Budget Planner",
+  title: "Marketing Budget Planner | Clover Growth Partners",
   description:
-    "Exclusive access portal for Clover Growth clients. Plan and track your marketing spend.",
+    "Exclusive access portal for Clover Growth clients. Plan, allocate, and track your marketing spend across every channel — all in one place.",
+  metadataBase: new URL("https://planner.growwithclover.com"),
+  openGraph: {
+    title: "Marketing Budget Planner | Clover Growth Partners",
+    description:
+      "Exclusive access portal for Clover Growth clients. Plan, allocate, and track your marketing spend across every channel — all in one place.",
+    url: "https://planner.growwithclover.com",
+    siteName: "Clover Growth Partners",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Clover Growth Partners – Marketing Budget Planner",
+      },
+    ],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Marketing Budget Planner | Clover Growth Partners",
+    description:
+      "Exclusive access portal for Clover Growth clients. Plan, allocate, and track your marketing spend across every channel — all in one place.",
+    images: ["/og-image.png"],
+  },
 };
 
 export default function RootLayout({
