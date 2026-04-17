@@ -508,12 +508,8 @@ export default function OnboardingPage() {
       // ── Step 1: Basics + Website + Services ─────────────────────────────
       case 1: {
         const toggleService = (val: ServiceOption) => {
-          const current = formData.services;
-          if (current.includes(val)) {
-            setFormData({ ...formData, services: current.filter((s) => s !== val) });
-          } else {
-            setFormData({ ...formData, services: [...current, val] });
-          }
+          // Single-select: only one service option at a time
+          setFormData({ ...formData, services: [val] });
         };
 
         const canProceed =
@@ -609,13 +605,13 @@ export default function OnboardingPage() {
                         }`}
                       >
                         <div
-                          className={`w-5 h-5 rounded border mr-3 flex items-center justify-center flex-shrink-0 ${
+                          className={`w-5 h-5 rounded-full border-2 mr-3 flex items-center justify-center flex-shrink-0 ${
                             isSelected
-                              ? "bg-primary border-primary text-white"
+                              ? "border-primary"
                               : "border-gray-300"
                           }`}
                         >
-                          {isSelected && <Check className="w-3.5 h-3.5" />}
+                          {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
                         </div>
                         <div>
                           <p
@@ -808,11 +804,16 @@ export default function OnboardingPage() {
                         {m}
                       </label>
                       <Input
-                        type="number"
-                        value={formData.revenueMonths[idx] === 0 ? "" : formData.revenueMonths[idx]}
-                        onChange={(e) => handleRevChange(idx, Number(e.target.value))}
-                        onWheel={(e) => (e.target as HTMLInputElement).blur()}
-                        placeholder="0"
+                        type="text"
+                        inputMode="numeric"
+                        value={formData.revenueMonths[idx] === 0 ? "" : `$${formData.revenueMonths[idx].toLocaleString("en-US")}`}
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/[$,]/g, "");
+                          if (/^\d*$/.test(raw)) {
+                            handleRevChange(idx, raw === "" ? 0 : Number(raw));
+                          }
+                        }}
+                        placeholder="$0"
                         className="px-2 py-1 h-8 text-sm"
                       />
                     </div>
