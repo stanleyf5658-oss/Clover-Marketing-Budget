@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowRight, Check, ChevronDown } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMutation } from "convex/react";
+import { useMutation, useConvexAuth } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -331,6 +331,9 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(1);
   const totalSteps = 9;
   const submitProfile = useMutation(api.onboarding.submitProfile);
+  const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
+  const isAuthenticatedRef = useRef(isAuthenticated);
+  useEffect(() => { isAuthenticatedRef.current = isAuthenticated; }, [isAuthenticated]);
 
   const [seasonalApplied, setSeasonalApplied] = useState(false);
 
@@ -477,6 +480,18 @@ export default function OnboardingPage() {
 
   const handleFinish = async () => {
     try {
+      // Wait up to 4 seconds for Convex auth token to be ready
+      if (!isAuthenticatedRef.current) {
+        let waited = 0;
+        while (!isAuthenticatedRef.current && waited < 4000) {
+          await new Promise((r) => setTimeout(r, 200));
+          waited += 200;
+        }
+        if (!isAuthenticatedRef.current) {
+          alert("Authentication is still loading. Please try again in a moment.");
+          return;
+        }
+      }
       await submitProfile({
         firstName: formData.firstName,
         companyName: formData.companyName,
@@ -1490,8 +1505,8 @@ export default function OnboardingPage() {
               <Button variant="ghost" onClick={prevStep}>
                 Back
               </Button>
-              <Button onClick={handleFinish} className="w-full sm:w-auto">
-                Go to my budget planner <ArrowRight className="w-4 h-4 ml-2" />
+              <Button onClick={handleFinish} disabled={isAuthLoading} className="w-full sm:w-auto">
+                {isAuthLoading ? "Loading..." : <>Go to my budget planner <ArrowRight className="w-4 h-4 ml-2" /></>}
               </Button>
             </div>
           </div>
