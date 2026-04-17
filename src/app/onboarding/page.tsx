@@ -332,9 +332,9 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(1);
   const totalSteps = 9;
   const submitProfile = useMutation(api.onboarding.submitProfile);
-  const { isSignedIn, isLoaded: isAuthLoaded, getToken } = useAuth();
-  const isSignedInRef = useRef(isSignedIn);
-  useEffect(() => { isSignedInRef.current = isSignedIn; }, [isSignedIn]);
+  const { userId, isLoaded: isAuthLoaded } = useAuth();
+  const userIdRef = useRef(userId);
+  useEffect(() => { userIdRef.current = userId; }, [userId]);
 
   const [seasonalApplied, setSeasonalApplied] = useState(false);
 
@@ -481,21 +481,22 @@ export default function OnboardingPage() {
 
   const handleFinish = async () => {
     try {
-      // Ensure Clerk session is ready before calling Convex mutation
-      if (!isSignedInRef.current) {
+      // Wait for Clerk to load and get the userId
+      let clerkUserId = userIdRef.current;
+      if (!clerkUserId) {
         let waited = 0;
-        while (!isSignedInRef.current && waited < 5000) {
+        while (!userIdRef.current && waited < 5000) {
           await new Promise((r) => setTimeout(r, 200));
           waited += 200;
         }
-        if (!isSignedInRef.current) {
+        clerkUserId = userIdRef.current;
+        if (!clerkUserId) {
           alert("You must be signed in to save your profile. Please sign in and try again.");
           return;
         }
       }
-      // Warm up the Clerk token so Convex receives it
-      await getToken({ template: "convex" }).catch(() => getToken());
       await submitProfile({
+        userId: clerkUserId,
         firstName: formData.firstName,
         companyName: formData.companyName,
         city: formData.city || undefined,

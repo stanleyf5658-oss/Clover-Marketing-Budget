@@ -3,6 +3,7 @@ import { v } from "convex/values";
 
 export const submitProfile = mutation({
   args: {
+    userId: v.string(),
     firstName: v.string(),
     companyName: v.string(),
     city: v.optional(v.string()),
@@ -17,20 +18,19 @@ export const submitProfile = mutation({
     allocations: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    // Require authentication — get Clerk userId
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
+    const userId = args.userId;
+    if (!userId) throw new Error("Missing userId");
 
     // Prevent duplicate profiles for the same user
     const existing = await ctx.db
       .query("contractors")
-      .withIndex("by_user", (q) => q.eq("userId", identity.subject))
+      .withIndex("by_user", (q) => q.eq("userId", userId))
       .first();
     if (existing) return existing._id;
 
     // 1. Create the Contractor Profile linked to the Clerk user
     const contractorId = await ctx.db.insert("contractors", {
-      userId: identity.subject,
+      userId,
       firstName: args.firstName,
       companyName: args.companyName,
       city: args.city,
